@@ -1,0 +1,29 @@
+groups:
+  - name: node-basics
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} no responde"
+          description: "Prometheus no puede scrapear {{ $labels.instance }} hace 2+ minutos."
+
+      - alert: HostDiskSpaceLow
+        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Menos del 10% de disco libre"
+          description: "El chain data de execution/consensus crece constantemente, revisar espacio."
+
+      - alert: HostMemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Menos del 10% de RAM disponible"
+          description: "execution+consensus pueden consumir varios GB en sync; si el host corre otros servicios, revisar swap y considerar liberar memoria."

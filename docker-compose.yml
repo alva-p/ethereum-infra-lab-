@@ -1,0 +1,114 @@
+services:
+  execution:
+    image: nethermind/nethermind:latest
+    container_name: execution
+    restart: unless-stopped
+    command:
+      - --config=${ETH_NETWORK}
+      - --JsonRpc.Enabled=true
+      - --JsonRpc.Host=0.0.0.0
+      - --JsonRpc.Port=8545
+      - --JsonRpc.JwtSecretFile=/jwt/jwt.hex
+      - --JsonRpc.EnabledModules=Eth,Net,Web3
+      - --JsonRpc.EngineHost=0.0.0.0
+      - --JsonRpc.EnginePort=8551
+      - --Metrics.Enabled=true
+      - --Metrics.ExposePort=6060
+      - --Network.DiscoveryPort=30303
+      - --Network.P2PPort=30303
+    ports:
+      - "30303:30303/tcp"
+      - "30303:30303/udp"
+    volumes:
+      - /data/ethereum-infra-lab/execution-db:/nethermind/nethermind_db
+      - /data/ethereum-infra-lab/execution-keystore:/nethermind/keystore
+      - /data/ethereum-infra-lab/execution-logs:/nethermind/logs
+      - ./jwt:/jwt:ro
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "3" }
+    networks: [ethnet]
+
+  consensus:
+    image: sigp/lighthouse:latest
+    container_name: consensus
+    restart: unless-stopped
+    command:
+      - lighthouse
+      - beacon_node
+      - --network=${ETH_NETWORK}
+      - --http
+      - --http-address=0.0.0.0
+      - --execution-endpoint=http://execution:8551
+      - --execution-jwt=/jwt/jwt.hex
+      - --checkpoint-sync-url=https://checkpoint-sync.${ETH_NETWORK}.ethpandaops.io
+      - --metrics
+      - --metrics-address=0.0.0.0
+      - --metrics-port=5054
+      - --port=9010
+    ports:
+      - "9010:9010/tcp"
+      - "9010:9010/udp"
+    volumes:
+      - /data/ethereum-infra-lab/consensus:/root/.lighthouse
+      - ./jwt:/jwt:ro
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "3" }
+    depends_on: [execution]
+    networks: [ethnet]
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    networks: [ethnet]
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    networks: [ethnet]
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on: [prometheus]
+    networks: [ethnet]
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on: [grafana]
+    networks: [ethnet]
+
+networks:
+  ethnet:
+
+volumes:
+  prometheus-data:
+  grafana-data:
