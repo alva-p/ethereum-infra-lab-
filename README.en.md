@@ -1,17 +1,20 @@
-[🇪🇸 Versión en español](./README.md)
+[Versión en español](./README.md)
 
 # Ethereum Infra Lab
 
 > A full Ethereum node (execution + consensus) operated as real infrastructure, not a
 > tutorial: Docker Compose, reverse proxy, DNS, Prometheus/Grafana monitoring, firewall,
-> and a runbook with **real incidents** found and fixed while operating it.
+> and a runbook with real incidents found and fixed while operating it.
 > Runs on the Hoodi testnet by default so it doesn't require ~2TB of disk or days of syncing.
 
-**Three real incidents documented in [`RUNBOOK.md`](./RUNBOOK.md)**: a mismapped volume
-path that filled the homelab's disk (67.8GB in an anonymous Docker volume, 155-restart
-crash loop), a RAM/swap saturation that broke metrics scraping, and a community Grafana
-dashboard with a broken variable that left every panel showing "No data". All three with
-step-by-step diagnosis, root cause and fix — not hypothetical, they happened while running this.
+## Why I built this
+
+I come from the smart contract security side of Ethereum, and wanted to add the
+infrastructure piece: understanding a protocol isn't enough if you can't also operate it —
+deploy it, monitor it, secure it, and respond when something breaks in production. I built
+this lab to practice exactly that with a real node, running on a homelab shared with other
+services (not an isolated lab environment), as preparation for infrastructure/DevOps roles
+with a blockchain focus.
 
 ## Screenshots
 
@@ -24,18 +27,37 @@ step-by-step diagnosis, root cause and fix — not hypothetical, they happened w
 ![Lighthouse — Network](screenshots/lighthouse-network.png)
 *Lighthouse Network: connected peers, libp2p bandwidth, dependency errors/warnings (execution layer, gossipsub, discv5).*
 
-## How this was built
+## Lessons learned
 
-Not a copied tutorial: it got built, broken, and fixed in a real working session.
-Short timeline (full detail on every incident in [`RUNBOOK.md`](./RUNBOOK.md)):
+Operating this on a shared homelab, instead of a clean lab environment, produced three
+real incidents — each with a full postmortem (diagnosis, root cause, fix) in
+[`RUNBOOK.md`](./RUNBOOK.md). Summary and the general takeaway from each:
 
-1. Initial design: Nethermind + Lighthouse in Docker Compose, a shared JWT for the Engine API, nginx exposing only Grafana (never the RPC).
-2. First deploy → **incident 1**: a mismapped volume path (`/nethermind/data` instead of `/nethermind/nethermind_db`) made Docker create an anonymous volume that grew to 67.8GB in 5 hours and filled the homelab's disk → 155-restart crash loop.
-3. Fix: correct the path, move the data to the HDD (`/data`, not the root SSD), add a log size limit. The node actually syncs now.
-4. **Incident 2**: once synced, `execution` + `consensus` combined were using ~7GB of RAM on a 13.6GB homelab already shared with other services → swap hit 100%, Prometheus lost Lighthouse's scrape to timeouts.
-5. Documented as a real resource constraint (no config shortcut fixes it) and added a `HostMemoryLow` alert to catch it earlier next time.
-6. Grafana + Prometheus set up, dashboards imported from Grafana.com and Lighthouse's official repo → **incident 3**: the Nethermind dashboard (ID 18746) filtered on a label (`nethermind_group`) that doesn't exist in this client version. Diagnosed directly via PromQL, fixed without touching ~80 panels one by one.
-7. Firewall (`ufw`) documented but **not enabled** on purpose: the homelab shares a server with other services (Jellyfin, TeamSpeak, Wazuh) that would've been cut off by a `deny incoming` policy without first surveying all their ports — a deliberate call, not an oversight.
+1. **A mismapped volume path filled the disk.** `docker-compose.yml` mounted
+   Nethermind's persistent volume at a path the image doesn't actually use; Docker
+   silently created an anonymous 67.8GB volume at the real path, unrequested, which
+   eventually caused a 155-restart crash loop.
+   **Takeaway**: never assume a "reasonable-looking" volume path is the correct one —
+   verify it against the image/project docs, and monitor the volume that's actually
+   growing, not the one you think you're using.
+
+2. **I underestimated a real node's memory footprint.** Once synced, `execution` +
+   `consensus` combined were using ~7GB of RAM on a 13.6GB homelab shared with other
+   services, saturating swap and breaking metrics scraping.
+   **Takeaway**: size resources for a real Ethereum node's actual footprint (not a
+   tutorial's, on a dedicated box), and alert on memory from day one, not just disk.
+
+3. **A community Grafana dashboard had gone stale.** The most popular Nethermind
+   dashboard on Grafana.com filtered on a label this client version no longer exposes,
+   leaving every panel showing "No data" even though the datasource itself was fine.
+   **Takeaway**: verify that an imported dashboard's variables/queries actually resolve
+   against real metrics before trusting it — "No data" doesn't always mean the data
+   source is broken.
+
+A fourth decision was deliberate, not an oversight: the firewall (`ufw`) is
+**documented but not enabled** on the real homelab, because that server shares a
+machine with other services (Jellyfin, TeamSpeak, Wazuh) that don't have their own
+rules yet, and enabling it without first surveying those ports would have cut them off.
 
 ## Architecture
 
