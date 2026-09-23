@@ -63,20 +63,9 @@ relevar esos puertos los hubiera dejado inaccesibles.
 
 ## Arquitectura
 
-```
-Internet ──(Cloudflare DNS, proxy naranja)── nginx:80/443 ── grafana:3000
-                                                                  │
-                                                             prometheus:9090
-                                                              │         │
-                                                    node-exporter   ┌───┴───┐
-                                                                    │       │
-                                                              execution  consensus
-                                                            (Nethermind) (Lighthouse)
-                                                                    │       │
-                                                                    └───┬───┘
-                                                                  JWT compartido
-                                                                (auth Engine API)
-```
+![Arquitectura: acceso a Grafana mediante Cloudflare y nginx; Prometheus monitorea Nethermind, Lighthouse y el host; Engine API autenticada con JWT en la red Docker.](docs/architecture.svg)
+
+[Diagrama editable en Excalidraw](docs/architecture.excalidraw)
 
 - **execution** (Nethermind): JSON-RPC (8545) y Engine API (8551) — **solo en la red interna de Docker**, nunca expuestos a internet (ver `nginx/nginx.conf`, motivo explicado ahí).
 - **consensus** (Lighthouse): beacon node, habla con execution via Engine API autenticada por JWT.

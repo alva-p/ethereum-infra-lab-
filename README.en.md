@@ -61,20 +61,9 @@ rules yet, and enabling it without first surveying those ports would have cut th
 
 ## Architecture
 
-```
-Internet ──(Cloudflare DNS, orange-cloud proxy)── nginx:80/443 ── grafana:3000
-                                                                       │
-                                                                  prometheus:9090
-                                                                   │         │
-                                                         node-exporter   ┌───┴───┐
-                                                                         │       │
-                                                                   execution  consensus
-                                                                 (Nethermind) (Lighthouse)
-                                                                         │       │
-                                                                         └───┬───┘
-                                                                       shared JWT
-                                                                    (Engine API auth)
-```
+![Architecture: Grafana access through Cloudflare and nginx; Prometheus monitors Nethermind, Lighthouse and the host; JWT-authenticated Engine API on the Docker network.](docs/architecture.svg)
+
+[Editable Excalidraw diagram](docs/architecture.excalidraw)
 
 - **execution** (Nethermind): JSON-RPC (8545) and Engine API (8551) — **only on Docker's internal network**, never exposed to the internet (see `nginx/nginx.conf` for why).
 - **consensus** (Lighthouse): beacon node, talks to execution via the JWT-authenticated Engine API.
